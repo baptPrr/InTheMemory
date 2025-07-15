@@ -6,9 +6,8 @@ authors = [
     {name = "baptprr",email = "baptiste_poirier@yahoo.fr"}
 ]
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.9"
 dependencies = [
-    "numpy (>=2.3.1,<3.0.0)",
     "pandas (>=2.3.1,<3.0.0)",
     "azure-storage-blob (>=12.25.1,<13.0.0)",
     "pyarrow (>=20.0.0,<21.0.0)",
