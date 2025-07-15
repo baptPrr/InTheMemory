@@ -1,0 +1,33 @@
+{
+    "version": "1.0.0",
+    "transactions": {
+        "transaction_id":"int64",
+        "client_id":"int64", 
+        "date":"object", 
+        "hour":"int64", 
+        "minute":"int64", 
+        "product_id":"int64", 
+        "quantity":"int64", 
+        "store_id":"int64"
+    },
+    "products":{
+        "id": "int64",
+        "ean": "int64",
+        "brand": "object",
+        "description": "object"
+    },
+    "stores":{
+        "id": "int64",
+        "latlng": "object",
+        "opening": "int64",
+        "closing": "int64",
+        "type": "int64"
+    },
+    "clients":{
+        "id": "int64",
+        "name":"object",
+        "job":"object",
+        "email": "object",
+        "account_id": "int64"
+    }
+}

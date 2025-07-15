@@ -1,3 +1,9 @@
+#my .gitignore files
+connection_string.txt
+settings.json
+.vscode
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
