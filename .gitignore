@@ -1,5 +1,6 @@
 #my .gitignore files
 connection_string.txt
+settings.json
 
 
 # Byte-compiled / optimized / DLL files
