@@ -25,8 +25,6 @@ def check_date_format(date_string : str):
 def schema_check(dataframe : pd.DataFrame, expected_schema : dict):
     if set(dataframe.columns) != set(expected_schema.keys()):
         print("Mismatching columns between dataframe and expected schema")
-        # print(set(dataframe.columns))
-        # print(dataframe.head)
         return False
     
     for col, col_type in expected_schema.items():
@@ -69,3 +67,25 @@ def move_file_in_blob(storage_client: BlobServiceClient,
         source_blob_client.delete_blob()
 
     print(f"File moved from {source_container_name}/{source_blob_name} to {destination_container_name}/{destination_blob_name}")
+
+def write_dataframe_to_parquet(storage_client: BlobServiceClient,
+                               df: pd.DataFrame, df_name : str,
+                               container_name:str,
+                               blob_prefix:str):
+    
+    # Créer un conteneur client
+    container_client = storage_client.get_container_client(container_name)
+
+    # Créer un buffer en mémoire pour le fichier Parquet
+    buffer = io.BytesIO()
+
+    # Écrire le DataFrame en Parquet dans le buffer
+    df.to_parquet(buffer, engine='pyarrow', compression="snappy")
+
+    # Réinitialiser la position du buffer
+    buffer.seek(0)
+
+    # Télécharger le fichier Parquet vers Azure Blob Storage
+    blob_client = container_client.get_blob_client(f"{blob_prefix}.parquet")
+    blob_client.upload_blob(buffer, overwrite=True)
+    print(f"Dataframe {df_name} successfully transformed and uploaded to Blob '{blob_prefix}.parquet'")

@@ -8,6 +8,7 @@ from utils import (
     retrieve_csv_data, 
     check_date_format, 
     move_file_in_blob,
+    write_dataframe_to_parquet,
     AZURE_CONTAINER,
     CONNECTION_STRING,
     SCHEMA
@@ -17,11 +18,12 @@ from utils import (
 
 def main():
     parser = argparse.ArgumentParser()
+    current_date = datetime.now().strftime("%Y-%m-%d")
     parser.add_argument(
         '--dates',
         type=check_date_format,
         nargs='*',
-        default=[datetime.now().strftime("%Y-%m-%d")],
+        default=[current_date],
         help='Date list (format YYYY-MM-DD) to process. Default to execution date.'
     )
     args = parser.parse_args()
@@ -44,7 +46,7 @@ def main():
             print(f"{ref_blob_name} file is corrupted. Moving it to 'errors' folder")
             move_file_in_blob(storage_client, 
                               ref_blob_name + ".csv", 
-                              "errors/" + ref_blob_name + "_" + datetime.now().strftime("%Y-%m-%d") + ".csv"
+                              "errors/" + ref_blob_name + "_" + current_date + ".csv"
                               )
             if ref_blob_name != "clients":
                 continue
@@ -69,8 +71,9 @@ def main():
         if any([d in blob.name for d in dates]) and blob.name.endswith(".csv"):
             blob_to_retrieve.append(blob.name)
 
+
     transactions_df = pd.DataFrame(columns = SCHEMA["transactions"].keys())
-    
+
     for blob in blob_to_retrieve:
         blob_df = retrieve_csv_data(container, blob)
         if not schema_check(blob_df, SCHEMA["transactions"]):
@@ -83,12 +86,17 @@ def main():
     transactions_df['datetime'] = pd.to_datetime(transactions_df["date"] + ' ' + transactions_df["hour"].astype(str) + ':' + transactions_df["minute"].astype(str), format='%Y-%m-%d %H:%M')
     # Add account_id from clients_df
     transactions_df = transactions_df.merge(clients_df[['account_id','id']], how="left", left_on="client_id",right_on="id")
-    transactions_df.drop(columns=["id"])
+    transactions_df.drop(columns=["id"], inplace=True)
     print(transactions_df.head())
 
-
-
+    daily_dfs = {date: group for date, group in transactions_df.groupby('date')}
+    for dt, df in daily_dfs.items():
+        write_dataframe_to_parquet(storage_client, df, f'transactions_{dt}', AZURE_CONTAINER, f"formatted/transactions/date={dt}/transactions")
     
+    write_dataframe_to_parquet(storage_client, clients_df,"clients", AZURE_CONTAINER, f"formatted/clients/date={current_date}/clients")
+    write_dataframe_to_parquet(storage_client, stores_df,"stores", AZURE_CONTAINER, f"formatted/stores/date={current_date}/stores")
+    write_dataframe_to_parquet(storage_client, products_df, "products", AZURE_CONTAINER, f"formatted/products/date={current_date}/products")
+
 
 if __name__ == "__main__":
     main()
