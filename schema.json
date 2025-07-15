@@ -4,8 +4,8 @@
         "transaction_id":"int64",
         "client_id":"int64", 
         "date":"object", 
-        "hour":"object", 
-        "minute":"object", 
+        "hour":"int64", 
+        "minute":"int64", 
         "product_id":"int64", 
         "quantity":"int64", 
         "store_id":"int64"
