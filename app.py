@@ -17,6 +17,7 @@ from utils import (
 
 
 def main():
+    # Add a parser to detect "dates" parameter
     parser = argparse.ArgumentParser()
     current_date = datetime.now().strftime("%Y-%m-%d")
     parser.add_argument(
@@ -29,7 +30,8 @@ def main():
     args = parser.parse_args()
     dates = args.dates
     print(f"Ingestion will process files from date(s) : {dates} ")
-    
+
+    # Instantiate storage client and container object
     storage_client = BlobServiceClient.from_connection_string(CONNECTION_STRING)
     container = storage_client.get_container_client(AZURE_CONTAINER)
 
@@ -48,14 +50,16 @@ def main():
                               ref_blob_name + ".csv", 
                               "errors/" + ref_blob_name + "_" + current_date + ".csv"
                               )
+            # As clients are necessary to enrich transactions, if clients file is corrupted, stop the execution
             if ref_blob_name != "clients":
                 continue
             else:
                 print("""Clients file is needed to proceed to transactions ingestion, but file is corrupted.
                       Ingestion process is terminated here, waiting for clients file to be repaired.""")
+                return 
 
     
-    # Remove parenthesis from latlng field
+    # Remove parenthesis from latlng field in stores
     stores_df["latlng_clean"] = stores_df["latlng"].str.replace('(', '').str.replace(')', '')
     # Extract latitude and longitude from latlng_clean field by splitting at ','
     stores_df[["latitude","longitude"]] = stores_df["latlng_clean"].str.split(',', expand=True)
@@ -65,13 +69,18 @@ def main():
     # Drop useless columns
     stores_df.drop(columns=["latlng_clean", "latlng"], inplace=True)
 
-    # Get transactions df (current day or specified dates)
+    # Write referential dataframes to azure blob storage as parquet
+    write_dataframe_to_parquet(storage_client, clients_df,"clients", AZURE_CONTAINER, f"formatted/clients/date={current_date}/clients")
+    write_dataframe_to_parquet(storage_client, stores_df,"stores", AZURE_CONTAINER, f"formatted/stores/date={current_date}/stores")
+    write_dataframe_to_parquet(storage_client, products_df, "products", AZURE_CONTAINER, f"formatted/products/date={current_date}/products")
+
+    # List all transactions files in blob storage matching current day or specified dates
     blob_to_retrieve = []
     for blob in container.list_blobs("transactions"):
         if any([d in blob.name for d in dates]) and blob.name.endswith(".csv"):
             blob_to_retrieve.append(blob.name)
 
-
+    # Create empty DataFrame to be completed by trnasactions files.
     transactions_df = pd.DataFrame(columns = SCHEMA["transactions"].keys())
 
     for blob in blob_to_retrieve:
@@ -81,21 +90,21 @@ def main():
             move_file_in_blob(storage_client,blob,"errors/" + blob)
             continue
         transactions_df = pd.concat([transactions_df, blob_df])
+
+    if transactions_df.empty:
+        print("No transactions for date {}. Skipping enrichment and writing.")
+        return 
     
-    # concat date, hour, minute to make a datetime field (or timestamp)
+    # concat date, hour, minute to make a datetime field 
     transactions_df['datetime'] = pd.to_datetime(transactions_df["date"] + ' ' + transactions_df["hour"].astype(str) + ':' + transactions_df["minute"].astype(str), format='%Y-%m-%d %H:%M')
     # Add account_id from clients_df
     transactions_df = transactions_df.merge(clients_df[['account_id','id']], how="left", left_on="client_id",right_on="id")
     transactions_df.drop(columns=["id"], inplace=True)
-    print(transactions_df.head())
 
+    # Group transactions per date to write in different partitions in azure blob storage
     daily_dfs = {date: group for date, group in transactions_df.groupby('date')}
     for dt, df in daily_dfs.items():
         write_dataframe_to_parquet(storage_client, df, f'transactions_{dt}', AZURE_CONTAINER, f"formatted/transactions/date={dt}/transactions")
-    
-    write_dataframe_to_parquet(storage_client, clients_df,"clients", AZURE_CONTAINER, f"formatted/clients/date={current_date}/clients")
-    write_dataframe_to_parquet(storage_client, stores_df,"stores", AZURE_CONTAINER, f"formatted/stores/date={current_date}/stores")
-    write_dataframe_to_parquet(storage_client, products_df, "products", AZURE_CONTAINER, f"formatted/products/date={current_date}/products")
 
 
 if __name__ == "__main__":

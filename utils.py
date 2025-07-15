@@ -8,11 +8,14 @@ from azure.storage.blob import ContainerClient, BlobServiceClient
 AZURE_CONTAINER = "76byj86oc9kf"
 REF_BLOB = ["clients", "stores","products"]
 
+# Get connection string
 with open("connection_string.txt") as f:
     CONNECTION_STRING = f.read()
 
+# Get schemas
 with open("schema.json") as j:
     SCHEMA = json.load(j)
+
 
 def check_date_format(date_string : str):
     try:
@@ -35,12 +38,14 @@ def schema_check(dataframe : pd.DataFrame, expected_schema : dict):
         
     return True
 
+
 def retrieve_csv_data(container: ContainerClient , blob_name : str, delimiter : str =';'):
     blob_client = container.get_blob_client(blob_name)
     blob_data = blob_client.download_blob()
     data = blob_data.readall()
     csv_data = pd.read_csv(io.BytesIO(data), delimiter=delimiter)
     return csv_data
+
 
 def move_file_in_blob(storage_client: BlobServiceClient,
                       source_blob_name : str,
@@ -68,24 +73,24 @@ def move_file_in_blob(storage_client: BlobServiceClient,
 
     print(f"File moved from {source_container_name}/{source_blob_name} to {destination_container_name}/{destination_blob_name}")
 
+
 def write_dataframe_to_parquet(storage_client: BlobServiceClient,
                                df: pd.DataFrame, df_name : str,
                                container_name:str,
                                blob_prefix:str):
     
-    # Créer un conteneur client
     container_client = storage_client.get_container_client(container_name)
 
-    # Créer un buffer en mémoire pour le fichier Parquet
+    # Create a buffer for parquet file
     buffer = io.BytesIO()
 
-    # Écrire le DataFrame en Parquet dans le buffer
+    # Write dataframe in the buffer
     df.to_parquet(buffer, engine='pyarrow', compression="snappy")
 
-    # Réinitialiser la position du buffer
+    # set buffer pointer to beginning of the file
     buffer.seek(0)
 
-    # Télécharger le fichier Parquet vers Azure Blob Storage
+    # Upload parquet file to Azure blob storage
     blob_client = container_client.get_blob_client(f"{blob_prefix}.parquet")
     blob_client.upload_blob(buffer, overwrite=True)
     print(f"Dataframe {df_name} successfully transformed and uploaded to Blob '{blob_prefix}.parquet'")
